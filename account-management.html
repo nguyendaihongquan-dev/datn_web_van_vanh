@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Tài Khoản</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .user-table {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="content">
+        <div class="card">
+            <div class="card-header">
+                <h5>Quản Lý Tài Khoản Người Dùng</h5>
+            </div>
+            <div class="card-body">
+                <button class="btn btn-primary" onclick="refreshUserList()">
+                    <i class="fas fa-sync"></i> Làm mới
+                </button>
+                <div class="table-responsive user-table">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>UID</th>
+                                <th>Email</th>
+                                <th>Tên hiển thị</th>
+                                <th>Trạng thái</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userTableBody">
+                            <!-- Dữ liệu sẽ được thêm vào đây -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script để xử lý dữ liệu -->
+    <script>
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const users = await response.json();
+                const tableBody = document.getElementById('userTableBody');
+                tableBody.innerHTML = '';
+
+                users.forEach(user => {
+                    const row = `
+                        <tr>
+                            <td>${user.uid}</td>
+                            <td>${user.email}</td>
+                            <td>${user.displayName || 'Chưa đặt tên'}</td>
+                            <td>
+                                <span class="badge ${user.disabled ? 'bg-danger' : 'bg-success'}">
+                                    ${user.disabled ? 'Vô hiệu hóa' : 'Hoạt động'}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-warning" onclick="toggleUserStatus('${user.uid}', ${user.disabled})">
+                                    ${user.disabled ? 'Kích hoạt' : 'Vô hiệu hóa'}
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteUser('${user.uid}')">
+                                    Xóa
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tableBody.innerHTML += row;
+                });
+            } catch (error) {
+                console.error('Lỗi khi tải danh sách người dùng:', error);
+                alert('Không thể tải danh sách người dùng');
+            }
+        }
+
+        async function toggleUserStatus(uid, currentStatus) {
+            try {
+                const response = await fetch(`/api/users/${uid}/toggle-status`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ disabled: !currentStatus })
+                });
+
+                if (response.ok) {
+                    loadUsers(); // Tải lại danh sách
+                } else {
+                    throw new Error('Không thể cập nhật trạng thái người dùng');
+                }
+            } catch (error) {
+                console.error('Lỗi:', error);
+                alert('Không thể cập nhật trạng thái người dùng');
+            }
+        }
+
+        async function deleteUser(uid) {
+            if (!confirm('Bạn có chắc chắn muốn xóa người dùng này?')) return;
+
+            try {
+                const response = await fetch(`/api/users/${uid}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    loadUsers(); // Tải lại danh sách
+                } else {
+                    throw new Error('Không thể xóa người dùng');
+                }
+            } catch (error) {
+                console.error('Lỗi:', error);
+                alert('Không thể xóa người dùng');
+            }
+        }
+
+        function refreshUserList() {
+            loadUsers();
+        }
+
+        // Tải danh sách người dùng khi trang được load
+        document.addEventListener('DOMContentLoaded', loadUsers);
+    </script>
+</body>
+</html> 

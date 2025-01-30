@@ -1,0 +1,53 @@
+.parking-lot {
+    padding: 15px;
+}
+
+.parking-space {
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 20px 15px;
+    text-align: center;
+    background-color: #ffffff;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    height: 100%;
+}
+
+.parking-space:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.parking-space i {
+    font-size: 2rem;
+    color: #4a90e2;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.parking-space h5 {
+    margin: 10px 0;
+    color: #333;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.status-badge.available {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+/* Thêm margin bottom cho mobile */
+@media (max-width: 768px) {
+    .parking-space {
+        margin-bottom: 15px;
+    }
+} 

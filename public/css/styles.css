@@ -1,0 +1,41 @@
+.sidebar {
+    min-height: 100vh;
+    background-color: #343a40;
+    color: white;
+}
+
+.nav-link {
+    color: white;
+    transition: all 0.3s;
+}
+
+.nav-link:hover {
+    background-color: #495057;
+    color: white;
+}
+
+.header {
+    background-color: #212529;
+    color: white;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.content {
+    padding: 20px;
+}
+
+.table-responsive {
+    margin-top: 20px;
+}
+
+.btn-action {
+    margin: 0 2px;
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+} 
