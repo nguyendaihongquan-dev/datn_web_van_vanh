@@ -13,7 +13,8 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Khởi tạo Firebase Admin
-const serviceAccount = require('./firebase-service-account.json');
+const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
