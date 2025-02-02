@@ -12,7 +12,7 @@
     <style>
         .sidebar {
             min-height: 100vh;
-            background-color: #343a40;
+            background-color: #079DD9;
             color: white;
         }
         .nav-link {
@@ -48,17 +48,17 @@
                             <i class="fas fa-users"></i> Quản lý tài khoản
                         </a>
                         <a class="nav-link p-3" href="#" onclick="loadContent('parking')">
-                            <i class="fas fa-car"></i> Quản lý xe
+                            <i class="fas fa-car"></i> Giám sát
                         </a>
-                        <a class="nav-link p-3" href="#" onclick="loadContent('ticket')">
-                            <i class="fas fa-ticket-alt"></i> Vé xe
+                         <a class="nav-link p-3" href="#" onclick="loadContent('ticket')">
+                            <i class="fas fa-ticket-alt"></i> Lịch sử
                         </a>
-                        <a class="nav-link p-3" href="#" onclick="loadContent('stats')">
+                        <!-- <a class="nav-link p-3" href="#" onclick="loadContent('stats')">
                             <i class="fas fa-chart-bar"></i> Thống kê
                         </a>
                         <a class="nav-link p-3" href="#" onclick="loadContent('settings')">
                             <i class="fas fa-cog"></i> Cài đặt
-                        </a>
+                        </a>  -->
                     </nav>
                 </div>
             </div>
@@ -115,15 +115,15 @@
 
     <!-- Initialize Firebase -->
     <script>
-    const firebaseConfig = {
-        apiKey: "AIzaSyArsBq4BbNpkT35cm45lLZWt3QMH8cyon0",
-        authDomain: "smartparking-bf0a0.firebaseapp.com",
-        databaseURL: "https://smartparking-bf0a0-default-rtdb.firebaseio.com",
-        projectId: "smartparking-bf0a0",
-        storageBucket: "smartparking-bf0a0.firebasestorage.app",
-        messagingSenderId: "692296108761",
-        appId: "1:692296108761:web:82de3ac889687c012accc8"
-    };
+   const firebaseConfig = {
+    apiKey: "AIzaSyCPdW9jcXHwzFWvY86nGJORllpNDRn35zI",
+    authDomain: "smartparkingsystem-f9fdd.firebaseapp.com",
+    databaseURL: "https://smartparkingsystem-f9fdd-default-rtdb.firebaseio.com",
+    projectId: "smartparkingsystem-f9fdd",
+    storageBucket: "smartparkingsystem-f9fdd.firebasestorage.app",
+    messagingSenderId: "811572822581",
+    appId: "1:811572822581:web:afb9206bd2e1d3a4e3a77c"
+  };
     firebase.initializeApp(firebaseConfig);
 
     // Tự động load trang quản lý tài khoản khi vào web

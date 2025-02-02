@@ -38,4 +38,24 @@
     justify-content: center;
     align-items: center;
     height: 200px;
+}
+
+.sidebar-menu {
+    background-color: #e0f7fa;
+    color: #00796b;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+.sidebar-menu a {
+    color: #00796b;
+    text-decoration: none;
+    display: block;
+    padding: 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s ease;
+}
+
+.sidebar-menu a:hover {
+    background-color: #b2ebf2;
 } 
