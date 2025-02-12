@@ -1,17 +1,9 @@
-// Load content function
-// const firebaseConfig = {
-//     apiKey: "AIzaSyCPdW9jcXHwzFWvY86nGJORllpNDRn35zI",
-//     authDomain: "smartparkingsystem-f9fdd.firebaseapp.com",
-//     databaseURL: "https://smartparkingsystem-f9fdd-default-rtdb.firebaseio.com",
-//     projectId: "smartparkingsystem-f9fdd",
-//     storageBucket: "smartparkingsystem-f9fdd.firebasestorage.app",
-//     messagingSenderId: "811572822581",
-//     appId: "1:811572822581:web:afb9206bd2e1d3a4e3a77c"
-//   };
-//     firebase.initializeApp(firebaseConfig);
+
+window.database = firebase.database();
+const messaging = firebase.messaging();
+
 function loadContent(page) {
-    const mainContent = document.getElementById('mainContent');
-    
+    const mainContent = document.getElementById('mainContent');  
     switch(page) {
         case 'account':
             mainContent.innerHTML = `
@@ -46,7 +38,7 @@ function loadContent(page) {
             
         case 'parking':
             mainContent.innerHTML = `
-                <h5>Số vị trí trống :24</h5>
+               <h3>Chỗ trống: <span id="available-count">0</span></h3>
                 <div class="card">
                     <div class="card-header bg-primary text-white">
                         <h5 class="mb-0">Sơ Đồ Bãi Đỗ Xe</h5>
@@ -68,6 +60,8 @@ function loadContent(page) {
                     </div>
                 </div>
             `;
+            updateParkingSlots();
+            countAvailableSlots();
             break;
             
         case 'home':
@@ -78,7 +72,7 @@ function loadContent(page) {
                         <div class="col-md-6">
                             <h2>Hình Ảnh Vào</h2>
                             <div id="entryImageContainer">
-                                <img src="./assets/images/car.jpg" alt="Hình Ảnh Vào" class="img-fluid">
+                            <iframe src="http://172.20.10.14/" width="100%" height="600px" style="border: none;"></iframe>  
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -113,9 +107,10 @@ function loadContent(page) {
                         </tbody>
                         </table>
                     </div>
-                    <button class="btn btn-primary mt-3" id="openBarrierButton">Mở Barie</button>
+                     <button id="openBarrierButton" class="btn btn-primary mt-3">Mở Barie</button>
                 </div>
             `;
+            addBarrierEventListener();
             break;
             
         case 'ticket':
@@ -194,15 +189,29 @@ function loadContent(page) {
             `;
             break;
             
-        case 'parking':
+        case 'alert':
             mainContent.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">Cài Đặt</h5>
-                        <p class="card-text">Chức năng đang phát triển...</p>
-                    </div>
+                <div class="container mt-5">
+                    <h2>Gửi Thông Báo</h2>
+                    <form id="notificationForm">
+                        <div class="form-group">
+                            <label for="contentTitle">Tiêu đề thông báo</label>
+                            <input type="text" class="form-control" id="contentTitle" placeholder="Nhập tiêu đề thông báo" required>
+                        </div>
+                        <div class="form-group mt-3">
+                            <label for="contentBody">Nội dung thông báo</label>
+                            <textarea class="form-control" id="contentBody" placeholder="Nhập nội dung thông báo" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary mt-3">Gửi</button>
+                    </form>
                 </div>
             `;
+            document.getElementById('notificationForm').addEventListener('submit', function(event) {
+                event.preventDefault();
+                const title = document.getElementById('contentTitle').value;
+                const body = document.getElementById('contentBody').value;
+                sendNotification(title, body);
+            });
             break;
             
         default:
@@ -215,11 +224,217 @@ function loadContent(page) {
                 </div>
             `;
     }
+   
+    
 }
+function countAvailableSlots() {
+    let totalSlots = 24;
+    let availableCount = 0;
+
+    for (let i = 1; i <= totalSlots; i++) {
+        let irSensorRef = database.ref(`parking/parkingLot/slots/slot${i}/irSensor`);
+        let datchoRef = database.ref(`parking/parkingLot/slots/slot${i}/datcho`);
+
+        Promise.all([
+            irSensorRef.once("value"),
+            datchoRef.once("value")
+        ]).then(([irSnapshot, datchoSnapshot]) => {
+            let irSensor = irSnapshot.val() || false;
+            let datcho = datchoSnapshot.val() || false;
+            let isOccupied = irSensor || datcho; // Chỉ cần 1 trong 2 là true thì "Kín"
+
+            let spaceElement = document.getElementById(`space-${i}`);
+            if (spaceElement) {
+                let statusBadge = spaceElement.querySelector(".status-badge");
+                if (isOccupied) {
+                    statusBadge.textContent = "Kín";
+                    statusBadge.classList.remove("available");
+                    statusBadge.classList.add("occupied");
+                } else {
+                    availableCount++;
+                    statusBadge.textContent = "Trống";
+                    statusBadge.classList.remove("occupied");
+                    statusBadge.classList.add("available");
+                }
+            }
+
+            // **Cập nhật UI sau khi kiểm tra tất cả slots**
+            if (i === totalSlots) {
+                document.getElementById("available-count").textContent = availableCount + " / " + totalSlots;
+            }
+        });
+    }
+}
+
+// **Hàm cập nhật slots theo thời gian thực**
+function updateParkingSlots() {
+    let totalSlots = 24;
+    let availableCount = 0;
+
+    for (let i = 1; i <= totalSlots; i++) {
+        let irSensorRef = database.ref(`parking/parkingLot/slots/slot${i}/irSensor`);
+        let datchoRef = database.ref(`parking/parkingLot/slots/slot${i}/datcho`);
+
+        irSensorRef.on("value", (irSnapshot) => {
+            datchoRef.on("value", (datchoSnapshot) => {
+                let irSensor = irSnapshot.val() || false;
+                let datcho = datchoSnapshot.val() || false;
+                let isOccupied = irSensor || datcho; // Chỉ cần 1 trong 2 là true thì "Kín"
+
+                let spaceElement = document.getElementById(`space-${i}`);
+                if (spaceElement) {
+                    let statusBadge = spaceElement.querySelector(".status-badge");
+                    if (isOccupied) {
+                        statusBadge.textContent = "Kín";
+                        statusBadge.classList.remove("available");
+                        statusBadge.classList.add("occupied");
+                    } else {
+                        statusBadge.textContent = "Trống";
+                        statusBadge.classList.remove("occupied");
+                        statusBadge.classList.add("available");
+                    }
+                }
+
+                // **Tính toán lại số chỗ trống**
+                updateAvailableCount();
+            });
+        });
+    }
+}
+async function getAllTokens() {
+    try {
+        const usersRef = database.ref("users"); // Đường dẫn tới danh sách user
+
+        const snapshot = await usersRef.once("value");
+
+        if (snapshot.exists()) {
+            const usersData = snapshot.val();
+            const tokens = Object.values(usersData)
+                .map(user => user.token)
+                .filter(token => token);
+
+            console.log("✅ Danh sách token:", tokens);
+            return tokens;
+        } else {
+            console.log("⚠️ Không tìm thấy dữ liệu trong Realtime Database.");
+            return [];
+        }
+    } catch (error) {
+        console.error("🚨 Lỗi khi lấy danh sách token:", error);
+        return [];
+    }
+}
+// Hàm gửi thông báo
+async function sendNotification(contentTitle, contentBody) {
+    try {
+        const tokens = await getAllTokens();
+        
+        if (tokens.length === 0) {
+            console.log('Không có token nào để gửi thông báo.');
+            return;
+        }
+
+        // Create a new notifications reference in the database
+        const notificationsRef = database.ref('notifications').push();
+        
+        // Save notification data
+        const notificationData = {
+            title: contentTitle,
+            body: contentBody,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            tokens: tokens,
+            status: 'pending'
+        };
+
+        // Save to database
+        await notificationsRef.set(notificationData);
+
+        // Update UI to show notification was queued
+        console.log('Thông báo đã được lưu và đang chờ xử lý');
+        
+        // Optional: Show success message to user
+        alert('Thông báo đã được gửi thành công!');
+        
+        // Clear the form
+        document.getElementById('notificationForm').reset();
+
+    } catch (error) {
+        console.error('Lỗi khi gửi thông báo:', error);
+        alert('Có lỗi xảy ra khi gửi thông báo. Vui lòng thử lại sau.');
+    }
+}
+// **Hàm cập nhật số lượng chỗ trống**
+function updateAvailableCount() {
+    let totalSlots = 24;
+    let availableCount = 0;
+    let checkedSlots = 0;
+
+    for (let i = 1; i <= totalSlots; i++) {
+        let irSensorRef = database.ref(`parking/parkingLot/slots/slot${i}/irSensor`);
+        let datchoRef = database.ref(`parking/parkingLot/slots/slot${i}/datcho`);
+
+        Promise.all([
+            irSensorRef.once("value"),
+            datchoRef.once("value")
+        ]).then(([irSnapshot, datchoSnapshot]) => {
+            let irSensor = irSnapshot.val() || false;
+            let datcho = datchoSnapshot.val() || false;
+            let isOccupied = irSensor || datcho;
+
+            if (!isOccupied) {
+                availableCount++;
+            }
+
+            checkedSlots++;
+
+            if (checkedSlots === totalSlots) {
+                document.getElementById("available-count").textContent = availableCount + " / " + totalSlots;
+            }
+        });
+    }
+}
+
+// Khởi tạo Firebase
+// const database = firebase.database();
+
+function addBarrierEventListener() {
+    const openBarrierButton = document.getElementById('openBarrierButton');
+    const barrierRef = firebase.database().ref('parking/barrier');
+
+    barrierRef.on('value', (snapshot) => {
+        const isBarrierOpen = snapshot.val();
+        if (isBarrierOpen) {
+            openBarrierButton.textContent = 'Đóng Barie';
+        } else {
+            openBarrierButton.textContent = 'Mở Barie';
+        }
+    });
+    
+    if (openBarrierButton) {
+        openBarrierButton.addEventListener('click', () => {
+            
+
+            const barrierRef = database.ref('parking/barrier');
+
+            barrierRef.once('value').then((snapshot) => {
+                const currentStatus = snapshot.val();
+                const newStatus = !currentStatus;
+
+                barrierRef.set(newStatus)
+                    .then(() => console.log('Cập nhật trạng thái barie thành công:', newStatus))
+                    .catch((error) => console.error('Lỗi cập nhật trạng thái barie:', error));
+            }).catch((error) => console.error('Lỗi khi đọc trạng thái barie:', error));
+        });
+    } else {
+        console.error('Không tìm thấy nút mở barie.');
+    }
+}
+
 
 // Load trang mặc định khi vừa vào
 document.addEventListener('DOMContentLoaded', () => {
-    loadContent('ticket');
+    loadContent('home');
+    // loadContent('ticket');
     // loadContent('parking');
 }); 
 // function listenToParkingSlotChanges(id, slot) {
