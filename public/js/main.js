@@ -128,43 +128,12 @@ function loadContent(page) {
                                     <th>Loại khách</th>
                                 </tr>
                             </thead>
-                            <tbody id="vehicleInfoTableBody">
-                            <tr>
-                              <td>123456</td>
-                                <td>18A123456</td>  
-                                <td>27/10/2024 08:00 </td>
-                                <td>27/10/2024 10:00 </td>
-                                <td>20.000 VNĐ</td>
-                                <td>Thành viên</td>
-                            </tr>
-                            <tr>
-                              <td>KJHSGDHSG</td>
-                                <td>29A123456</td>  
-                                <td>27/10/2024 08:00 </td>
-                                <td>27/10/2024 10:00 </td>
-                                <td>20.000 VNĐ</td>
-                                 <td>Thành viên</td>
-                            </tr>
-                            <tr>
-                              <td>KJHSGDHSG</td>
-                                <td>17A123456</td>  
-                                <td>27/10/2024 08:00 </td>
-                                <td>27/10/2024 10:00 </td>
-                                <td>20.000 VNĐ</td>
-                                <td>Vãng lai</td>
-                            </tr>
-                            <tr>
-                              <td>KJHSGDHSG</td>
-                                <td>13A123456</td>  
-                                <td>27/10/2024 08:00 </td>
-                                <td>27/10/2024 10:00 </td>
-                                <td>20.000 VNĐ</td>
-                                <td>Vãng lai</td>
-                            </tr>
-                        </tbody>
+                            <tbody id="historyTableBody">
+                            </tbody>
                         </table>
                     </div>
             `;
+            loadHistory();
             break;
             
         case 'stats':
@@ -227,6 +196,39 @@ function loadContent(page) {
    
     
 }
+async function loadHistory() {
+    const historyRef = database.ref("history");
+    try {
+        const snapshot =  await historyRef.once("value");
+        // await historyRef.once("value");
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const tableBody = document.getElementById("historyTableBody");
+
+            tableBody.innerHTML = ""; // Xóa dữ liệu cũ trước khi render mới
+
+            Object.keys(data).forEach((timestamp) => {
+                const item = data[timestamp]; // Lấy trực tiếp thông tin của timestamp
+
+                const row = `
+                    <tr>
+                        <td>${item.idCard}</td>
+                        <td>${item.numberPlate}</td>
+                        <td>${item.time_in}</td>
+                        <td>${item.time_out}</td>
+                        <td>${item.price}</td>
+                        <td>${item.type}</td>
+                    </tr>
+                `;
+                tableBody.innerHTML += row;
+            });
+        } else {
+            console.log("Không có dữ liệu trong history.");
+        }
+    } catch (error) {
+        console.error("Lỗi khi lấy dữ liệu từ Firebase:", error);
+    }
+}
 function countAvailableSlots() {
     let totalSlots = 24;
     let availableCount = 0;
@@ -265,6 +267,73 @@ function countAvailableSlots() {
         });
     }
 }
+function pushHistory(data1, data2, data3, data4, data5, data6) {
+    const datetimeNow = new Date().getTime(); // Lấy timestamp đến mili giây
+    const idCard =  database.ref(`history/${datetimeNow}/icCard`);
+    const numberPlate =  database.ref(`history/${datetimeNow}/numberPlate`);
+    const timeIn =  database.ref(`history/${datetimeNow}/time_in`);
+    const timeout =  database.ref( `history/${datetimeNow}/time_out`);
+    const payment =  database.ref( `history/${datetimeNow}/money`);
+    const type =  database.ref(`history/${datetimeNow}/type`);
+    idCard.set(data1)
+      .then(() => {
+        console.log("Dữ liệu đã được đẩy lên Firebase thành công!");
+      })
+      .catch((error) => {
+        console.error("Lỗi khi đẩy dữ liệu:", error);
+      });
+    numberPlate.set(data2)
+      .then(() => {
+        console.log("Dữ liệu đã được đẩy lên Firebase thành công!");
+      })
+      .catch((error) => {
+        console.error("Lỗi khi đẩy dữ liệu:", error);
+      });
+    timeIn.set(data3)
+      .then(() => {
+        console.log("Dữ liệu đã được đẩy lên Firebase thành công!");
+      })
+      .catch((error) => {
+        console.error("Lỗi khi đẩy dữ liệu:", error);
+      });
+    timeout.set(data4)
+      .then(() => {
+        console.log("Dữ liệu đã được đẩy lên Firebase thành công!");
+      })
+      .catch((error) => {
+        console.error("Lỗi khi đẩy dữ liệu:", error);
+      }); 
+    payment.set(data5)
+      .then(() => {
+        console.log("Dữ liệu đã được đẩy lên Firebase thành công!");
+      })
+      .catch((error) => {
+        console.error("Lỗi khi đẩy dữ liệu:", error);
+      }); 
+      type.set(data6)
+      .then(() => {
+        console.log("Dữ liệu đã được đẩy lên Firebase thành công!");
+      })
+      .catch((error) => {
+        console.error("Lỗi khi đẩy dữ liệu:", error);
+      });
+}
+async function checkIfKeyExists(checkKey) {
+    const dbRef = ref(database);
+    try {
+        const snapshot = await get(child(dbRef, "parking/checklist/Monthly"));
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            return data.hasOwnProperty(checkKey); // Kiểm tra key có tồn tại không
+        } else {
+            return false; // Nhánh Monthly không tồn tại
+        }
+    } catch (error) {
+        console.error("Lỗi khi kiểm tra key:", error);
+        return false;
+    }
+}
+
 function fetchParkingData() {
     const idCardElement = document.getElementById("idCard");
     const timeInElement = document.getElementById("timeIn");
@@ -289,7 +358,17 @@ function fetchParkingData() {
             database.ref("parking/rfid_realtime/numberPlate").on("value", (snapshot) => {
                 numberPlateElement.innerText = snapshot.val() || "N/A";
             });
-
+            const type ="Vãng lai";
+            checkIfKeyExists(idCardElement.innerText).then((exists) => {
+                if (exists) {
+                    type ="Thành viên";
+                    console.log(`Key "${keyToCheck}" tồn tại trong database.`);
+                } else {
+                    type="Vãng lai";
+                    console.log(`Key "${keyToCheck}" KHÔNG tồn tại trong database.`);
+                }
+            });
+        pushHistory(idCardElement.innerText, numberPlateElement.innerText, timeInElement.innerText, "0", "0", type);
         } else {
             // Cập nhật dữ liệu khi xe ra
             database.ref("parking/rfid_realtime/idCard").on("value", (snapshot) => {
