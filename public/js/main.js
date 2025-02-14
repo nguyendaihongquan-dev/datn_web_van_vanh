@@ -1,6 +1,5 @@
-
 window.database = firebase.database();
-const messaging = firebase.messaging();
+
 
 function loadContent(page) {
     const mainContent = document.getElementById('mainContent');  
@@ -72,7 +71,7 @@ function loadContent(page) {
                         <div class="col-md-6">
                             <h2>Hình Ảnh Vào</h2>
                             <div id="entryImageContainer">
-                            <iframe src="http://172.20.10.14/" width="100%" height="600px" style="border: none;"></iframe>  
+                            <img src="./assets/images/car.jpg" alt="Hình Ảnh Vào" class="img-fluid">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -97,12 +96,12 @@ function loadContent(page) {
                             </thead>
                             <tbody id="vehicleInfoTableBody">
                             <tr>
-                              <td>KJHSGDHSG</td>
-                                <td>18A123456</td>
-                                <td>18A123456</td>
-                                <td>08:00 27/10/2024 AM</td>
-                                <td>10:00 27/10/2024 AM</td>
-                                <td>20.000 VNĐ</td>
+                                <td id="idCard">N/A</td>
+                                <td id="numberPlate">N/A</td>
+                                <td id="numberPlateOut">N/A</td>
+                                <td id="timeIn">N/A</td>
+                                <td id="timeout">N/A</td>
+                                <td id="payment">N/A</td>
                             </tr>
                         </tbody>
                         </table>
@@ -111,6 +110,7 @@ function loadContent(page) {
                 </div>
             `;
             addBarrierEventListener();
+            fetchParkingData();
             break;
             
         case 'ticket':
@@ -210,7 +210,7 @@ function loadContent(page) {
                 event.preventDefault();
                 const title = document.getElementById('contentTitle').value;
                 const body = document.getElementById('contentBody').value;
-                sendNotification(title, body);
+                requestNotification(title, body);
             });
             break;
             
@@ -265,7 +265,53 @@ function countAvailableSlots() {
         });
     }
 }
+function fetchParkingData() {
+    const idCardElement = document.getElementById("idCard");
+    const timeInElement = document.getElementById("timeIn");
+    const timeoutElement = document.getElementById("timeout");
+    const numberPlateElement = document.getElementById("numberPlate");
+    const numberPlateElementOut = document.getElementById("numberPlateOut");
 
+    // Lắng nghe thay đổi real-time của `status`
+    database.ref("parking/rfid_realtime/status").on("value", (snapshot) => {
+        const status = snapshot.val();
+        
+        if (status === "IN") {
+            // Cập nhật dữ liệu khi xe vào
+            database.ref("parking/rfid_realtime/idCard").on("value", (snapshot) => {
+                idCardElement.innerText = snapshot.val() || "N/A";
+            });
+
+            database.ref("parking/rfid_realtime/time_in").on("value", (snapshot) => {
+                timeInElement.innerText = snapshot.val() || "N/A";
+            });
+
+            database.ref("parking/rfid_realtime/numberPlate").on("value", (snapshot) => {
+                numberPlateElement.innerText = snapshot.val() || "N/A";
+            });
+
+        } else {
+            // Cập nhật dữ liệu khi xe ra
+            database.ref("parking/rfid_realtime/idCard").on("value", (snapshot) => {
+                idCardElement.innerText = snapshot.val() || "N/A";
+            });
+
+            database.ref("parking/rfid_realtime/time_in").on("value", (snapshot) => {
+                timeInElement.innerText = snapshot.val() || "N/A";
+            });
+
+            database.ref("parking/rfid_realtime/time_out").on("value", (snapshot) => {
+                timeoutElement.innerText = snapshot.val() || "N/A";
+            });
+
+            database.ref("parking/rfid_realtime/numberPlate").on("value", (snapshot) => {
+                const plate = snapshot.val() || "N/A";
+                numberPlateElement.innerText = plate;
+                numberPlateElementOut.innerText = plate;
+            });
+        }
+    });
+}
 // **Hàm cập nhật slots theo thời gian thực**
 function updateParkingSlots() {
     let totalSlots = 24;
@@ -325,45 +371,7 @@ async function getAllTokens() {
     }
 }
 // Hàm gửi thông báo
-async function sendNotification(contentTitle, contentBody) {
-    try {
-        const tokens = await getAllTokens();
-        
-        if (tokens.length === 0) {
-            console.log('Không có token nào để gửi thông báo.');
-            return;
-        }
 
-        // Create a new notifications reference in the database
-        const notificationsRef = database.ref('notifications').push();
-        
-        // Save notification data
-        const notificationData = {
-            title: contentTitle,
-            body: contentBody,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            tokens: tokens,
-            status: 'pending'
-        };
-
-        // Save to database
-        await notificationsRef.set(notificationData);
-
-        // Update UI to show notification was queued
-        console.log('Thông báo đã được lưu và đang chờ xử lý');
-        
-        // Optional: Show success message to user
-        alert('Thông báo đã được gửi thành công!');
-        
-        // Clear the form
-        document.getElementById('notificationForm').reset();
-
-    } catch (error) {
-        console.error('Lỗi khi gửi thông báo:', error);
-        alert('Có lỗi xảy ra khi gửi thông báo. Vui lòng thử lại sau.');
-    }
-}
-// **Hàm cập nhật số lượng chỗ trống**
 function updateAvailableCount() {
     let totalSlots = 24;
     let availableCount = 0;
@@ -437,6 +445,28 @@ document.addEventListener('DOMContentLoaded', () => {
     // loadContent('ticket');
     // loadContent('parking');
 }); 
+async function requestNotification(title, body) {
+    const tokens = "eUtpT8ywQSKcOm0eSVILc9:APA91bEjWpI4N9YEVlKEcnc2_sJD6Q3C87Ns2zO_JK41l4EaSANPLlwAV73rHrYF6it2kZt_-4NOVUMJR4aX0yhN4RMBmb26AnjxlIkjt_LPzzqw1fT27-c";
+
+    try {
+        const response = await fetch('/api/send-notification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ tokens, title, body })
+        });
+
+        const data = await response.json();
+        console.log(data.message);
+    } catch (error) {
+        console.error('Lỗi khi gửi yêu cầu thông báo:', error);
+    }
+}
+
+// Gọi hàm requestNotification khi cần
+
+
 // function listenToParkingSlotChanges(id, slot) {
 //     const parkingStatusDiv = document.getElementById(id);
 //     database.ref(slot).on("value", (snapshot) => {

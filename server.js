@@ -170,6 +170,35 @@ app.delete('/api/users/:uid', authenticateToken, async (req, res) => {
     }
 });
 
+async function sendNotification(tokens, title, body) {
+    const message = {
+        token: tokens,/// ĐỔI THÀNH TOKENS NẾU SEN DNHIEEUF NOTI // NHẬN VÀO LIST TOKENS 
+        notification: {
+            title: title,
+            body: body
+        }
+    };
+
+    try {
+        const response = await admin.messaging().send(message);// ĐỔI SANG SEND MULTICAST NẾU SEN DNHIEEUF NOTI // NHẬN VÀO LIST TOKENS 
+        console.log('Thông báo đã gửi thành công:', response);
+    } catch (error) {
+        console.error('Lỗi khi gửi thông báo:', error);
+    }
+}
+
+// Ví dụ sử dụng hàm sendNotification
+app.post('/api/send-notification', async (req, res) => {
+    const { tokens, title, body } = req.body;
+
+    if (!tokens || !title || !body) {
+        return res.status(400).json({ error: 'Thiếu thông tin cần thiết' });
+    }
+
+    await sendNotification(tokens, title, body);
+    res.json({ message: 'Thông báo đã được gửi' });
+});
+
 // Serve static files
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -179,4 +208,22 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`Server đang chạy tại http://localhost:${PORT}`);
-}); 
+});
+
+async function requestNotification(title, body) {
+    const tokens = "eUtpT8ywQSKcOm0eSVILc9:APA91bEjWpI4N9YEVlKEcnc2_sJD6Q3C87Ns2zO_JK41l4EaSANPLlwAV73rHrYF6it2kZt_-4NOVUMJR4aX0yhN4RMBmb26AnjxlIkjt_LPzzqw1fT27-c"; // Thay thế bằng các token thực tế
+    try {
+        const response = await fetch('/api/send-notification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ tokens, title, body })
+        });
+
+        const data = await response.json();
+        console.log('Server response:', data);
+    } catch (error) {
+        console.error('Lỗi khi gửi yêu cầu thông báo:', error);
+    }
+} 
