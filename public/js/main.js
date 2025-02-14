@@ -1,4 +1,5 @@
 window.database = firebase.database();
+const storage = firebase.storage();
 
 
 function loadContent(page) {
@@ -67,20 +68,23 @@ function loadContent(page) {
             mainContent.innerHTML = `
                 <div class="container">
                     <h1>Quản Lý Ra Vào Bãi Đỗ Xe</h1>
+                    
                     <div class="row">
                         <div class="col-md-6">
-                            <h2>Hình Ảnh Vào</h2>
-                            <div id="entryImageContainer">
-                            <img src="./assets/images/car.jpg" alt="Hình Ảnh Vào" class="img-fluid">
+                            <h2>Hình Ảnh</h2>
+                            <div id="entryImageContainer" style="width: 100%; height: 300px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #f4f4f4;">
+                                <img src="https://www.circuitdigest.cloud/static/V5mg4zAvZdy3.jpeg" alt="Hình Ảnh Vào" style="width: 100%; height: 100%; object-fit: cover;">
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <h2>Hình Ảnh Ra</h2>
-                            <div id="exitImageContainer">
-                                <img src="./assets/images/car.jpg" alt="Hình Ảnh Ra" class="img-fluid">
+                            <h2>Video Camera</h2>
+                            <div id="exitImageContainer" style="width: 100%; height: 300px; display: flex; align-items: center; justify-content: center; overflow: hidden; ">
+                                <iframe src="http://192.168.244.18/" style="width: 100%; height: 100%; border: none;"></iframe>
                             </div>
                         </div>
                     </div>
+
+
                     <div class="info-panel mt-4">
                         <h2>Thông Tin Xe</h2>
                         <table class="table table-bordered">
@@ -111,6 +115,8 @@ function loadContent(page) {
             `;
             addBarrierEventListener();
             fetchParkingData();
+            getImagesFromFolder("INTPUT/", "in");
+            getImagesFromFolder("OUTPUT/", "out");
             break;
             
         case 'ticket':
@@ -212,11 +218,11 @@ async function loadHistory() {
 
                 const row = `
                     <tr>
-                        <td>${item.idCard}</td>
+                        <td>${item.icCard}</td>
                         <td>${item.numberPlate}</td>
                         <td>${item.time_in}</td>
                         <td>${item.time_out}</td>
-                        <td>${item.price}</td>
+                        <td>${item.money}</td>
                         <td>${item.type}</td>
                     </tr>
                 `;
@@ -267,8 +273,45 @@ function countAvailableSlots() {
         });
     }
 }
+function updateHistoryWithExit(numberPlate, timeOut, money) {
+    database.ref("history")
+        .orderByChild("numberPlate")
+        .equalTo(numberPlate)
+        .once("value", (snapshot) => {
+            if (snapshot.exists()) {
+                let latestKey = null;
+                let latestTime = 0;
+
+                snapshot.forEach((childSnapshot) => {
+                    const entry = childSnapshot.val();
+                    const entryTime = parseInt(childSnapshot.key, 10); // Timestamp key của bản ghi
+
+                    if (!isNaN(entryTime) && entryTime > latestTime) {
+                        latestTime = entryTime;
+                        latestKey = childSnapshot.key;
+                    }
+                });
+
+                if (latestKey) {
+                    database.ref(`history/${latestKey}`).update({
+                        time_out: timeOut,
+                        money: money
+                    }).then(() => {
+                        console.log(`Cập nhật thành công: ${latestKey} - time_out = ${timeOut}, money = ${money}`);
+                    }).catch((error) => {
+                        console.error("Lỗi khi cập nhật lịch sử:", error);
+                    });
+                } else {
+                    console.log("Không tìm thấy lịch sử phù hợp.");
+                }
+            } else {
+                console.log(`Không có lịch sử nào trùng với biển số xe: ${numberPlate}`);
+            }
+        });
+}
+
 function pushHistory(data1, data2, data3, data4, data5, data6) {
-    const datetimeNow = new Date().getTime(); // Lấy timestamp đến mili giây
+    const datetimeNow = Math.floor(new Date().getTime() / 1000);// Lấy timestamp đến mili giây
     const idCard =  database.ref(`history/${datetimeNow}/icCard`);
     const numberPlate =  database.ref(`history/${datetimeNow}/numberPlate`);
     const timeIn =  database.ref(`history/${datetimeNow}/time_in`);
@@ -319,14 +362,14 @@ function pushHistory(data1, data2, data3, data4, data5, data6) {
       });
 }
 async function checkIfKeyExists(checkKey) {
-    const dbRef = ref(database);
+    const dbRef = database.ref("history");
     try {
-        const snapshot = await get(child(dbRef, "parking/checklist/Monthly"));
+        const snapshot = await dbRef.child("parking/checklist/Monthly").get();
         if (snapshot.exists()) {
             const data = snapshot.val();
-            return data.hasOwnProperty(checkKey); // Kiểm tra key có tồn tại không
+            return data.hasOwnProperty(checkKey);
         } else {
-            return false; // Nhánh Monthly không tồn tại
+            return false;
         }
     } catch (error) {
         console.error("Lỗi khi kiểm tra key:", error);
@@ -340,57 +383,148 @@ function fetchParkingData() {
     const timeoutElement = document.getElementById("timeout");
     const numberPlateElement = document.getElementById("numberPlate");
     const numberPlateElementOut = document.getElementById("numberPlateOut");
-
+    const paymentElement = document.getElementById("payment");
     // Lắng nghe thay đổi real-time của `status`
     database.ref("parking/rfid_realtime/status").on("value", (snapshot) => {
         const status = snapshot.val();
-        
-        if (status === "IN") {
-            // Cập nhật dữ liệu khi xe vào
-            database.ref("parking/rfid_realtime/idCard").on("value", (snapshot) => {
-                idCardElement.innerText = snapshot.val() || "N/A";
-            });
+    
+        // Kiểm tra giá trị check trước khi xử lý
+        database.ref("parking/rfid_realtime/checked").once("value", (checkSnapshot) => {
+            const check = checkSnapshot.val();
+    
+            if (check === true) {
+                if (status === "IN") {
+                    // Cập nhật dữ liệu khi xe vào
+                    database.ref("parking/rfid_realtime/idCard").once("value", (snapshot) => {
+                        idCardElement.innerText = snapshot.val() || "N/A";
+                    });
+    
+                    database.ref("parking/rfid_realtime/time_in").once("value", (snapshot) => {
+                        timeInElement.innerText = snapshot.val() || "N/A";
+                    });
+    
+                    database.ref("parking/rfid_realtime/numberPlate").once("value", (snapshot) => {
+                        numberPlateElement.innerText = snapshot.val() || "N/A";
+                    });
+    
+                    let type = "Vãng lai";
+                    checkIfKeyExists(idCardElement.innerText).then((exists) => {
+                        if (exists) {
+                            type = "Thành viên";
+                            console.log(`Key "${idCardElement.innerText}" tồn tại trong database.`);
+                        } else {
+                            type = "Vãng lai";
+                            console.log(`Key "${idCardElement.innerText}" KHÔNG tồn tại trong database.`);
+                        }
+    
+                        // Đẩy lịch sử vào database
+                        pushHistory(idCardElement.innerText, numberPlateElement.innerText, timeInElement.innerText, "0", "0", type);
+                    });
+                } else if (status === "OUT") {
+                    // Cập nhật dữ liệu khi xe ra
+                    database.ref("parking/rfid_realtime/idCard").once("value", (snapshot) => {
+                        idCardElement.innerText = snapshot.val() || "N/A";
+                    });
+    
+                    // database.ref("parking/rfid_realtime/time_in").once("value", (snapshot) => {
+                    //     timeInElement.innerText = snapshot.val() || "N/A";
+                    // });
+    
+                    database.ref("parking/rfid_realtime/time_out").once("value", (snapshot) => {
+                        timeoutElement.innerText = snapshot.val() || "N/A";
+                    });
+                    
+                    database.ref("parking/rfid_realtime/numberPlate").once("value", (snapshot) => {
+                        const plate = snapshot.val() || "N/A";
+                        numberPlateElement.innerText = plate;
+                        numberPlateElementOut.innerText = plate;
+                    
+                        const money = calculateParkingFee(timeoutElement.innerText);
+                        paymentElement.innerText = money;
+                    
+                        // Tìm lịch sử cuối cùng có biển số trùng
+                        findLatestHistoryByPlate(plate).then((history) => {
+                            if (!history) {
+                                console.error("Không tìm thấy lịch sử vào cho biển số:", plate);
+                                return;
+                            }
+                            var historyId = history.id;
+                            database.ref("parking/history/historyId/numberPlate").once("value", (snapshot) => {
+                                const numberPlate = snapshot.val() || "N/A";
+                                timeInElement.innerText = history.time_in;
+                                updateHistoryWithExit(numberPlate, timeoutElement.innerText, money);
+                            });
+                        });
+                    });
+                }
+            }
+        });
+    });
+    
+}
+function findLatestHistoryByPlate(numberPlate) {
+    return database.ref("history")
+        .orderByChild("numberPlate")
+        .equalTo(numberPlate)
+        .once("value")
+        .then((snapshot) => {
+            if (!snapshot.exists()) {
+                console.log("Không tìm thấy lịch sử cho biển số:", numberPlate);
+                return null;
+            }
 
-            database.ref("parking/rfid_realtime/time_in").on("value", (snapshot) => {
-                timeInElement.innerText = snapshot.val() || "N/A";
-            });
+            let latestEntry = null;
+            let latestKey = null;
+            let latestTime = 0;
 
-            database.ref("parking/rfid_realtime/numberPlate").on("value", (snapshot) => {
-                numberPlateElement.innerText = snapshot.val() || "N/A";
-            });
-            const type ="Vãng lai";
-            checkIfKeyExists(idCardElement.innerText).then((exists) => {
-                if (exists) {
-                    type ="Thành viên";
-                    console.log(`Key "${keyToCheck}" tồn tại trong database.`);
-                } else {
-                    type="Vãng lai";
-                    console.log(`Key "${keyToCheck}" KHÔNG tồn tại trong database.`);
+            snapshot.forEach((childSnapshot) => {
+                const entry = childSnapshot.val();
+                const entryTime = parseInt(childSnapshot.key, 10); // Key là timestamp
+
+                if (!isNaN(entryTime) && entryTime > latestTime) {
+                    latestTime = entryTime;
+                    latestKey = childSnapshot.key;
+                    latestEntry = entry;
                 }
             });
-        pushHistory(idCardElement.innerText, numberPlateElement.innerText, timeInElement.innerText, "0", "0", type);
-        } else {
-            // Cập nhật dữ liệu khi xe ra
-            database.ref("parking/rfid_realtime/idCard").on("value", (snapshot) => {
-                idCardElement.innerText = snapshot.val() || "N/A";
-            });
 
-            database.ref("parking/rfid_realtime/time_in").on("value", (snapshot) => {
-                timeInElement.innerText = snapshot.val() || "N/A";
-            });
-
-            database.ref("parking/rfid_realtime/time_out").on("value", (snapshot) => {
-                timeoutElement.innerText = snapshot.val() || "N/A";
-            });
-
-            database.ref("parking/rfid_realtime/numberPlate").on("value", (snapshot) => {
-                const plate = snapshot.val() || "N/A";
-                numberPlateElement.innerText = plate;
-                numberPlateElementOut.innerText = plate;
-            });
-        }
-    });
+            if (latestEntry && latestKey) {
+                return { id: latestKey, ...latestEntry };
+            } else {
+                return null;
+            }
+        })
+        .catch((error) => {
+            console.error("Lỗi khi truy vấn lịch sử:", error);
+            return null;
+        });
 }
+
+function parseDate(timeString) {
+    // Chuyển "15-02-2025 02:08:14" → "2025-02-15T02:08:14"
+    const parts = timeString.split(" ");
+    const dateParts = parts[0].split("-").reverse().join("-");
+    return new Date(`${dateParts}T${parts[1]}`);
+}
+function calculateParkingFee(timeOut) {
+    if (!timeOut) {
+        console.error("Thiếu dữ liệu timeOut");
+        return 0;
+    }
+
+    const outTime = parseDate(timeOut);; // Chuyển đổi thành đối tượng Date
+    if (isNaN(outTime.getTime())) {
+        console.error("Lỗi khi chuyển đổi timeOut:", timeOut);
+        return 0;
+    }
+
+    // Lấy giờ của thời gian out
+    const hour = outTime.getHours();
+
+    // So sánh với 18h
+    return hour < 18 ? 3000 : 5000;
+}
+
 // **Hàm cập nhật slots theo thời gian thực**
 function updateParkingSlots() {
     let totalSlots = 24;
@@ -525,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // loadContent('parking');
 }); 
 async function requestNotification(title, body) {
-    const tokens = "eUtpT8ywQSKcOm0eSVILc9:APA91bEjWpI4N9YEVlKEcnc2_sJD6Q3C87Ns2zO_JK41l4EaSANPLlwAV73rHrYF6it2kZt_-4NOVUMJR4aX0yhN4RMBmb26AnjxlIkjt_LPzzqw1fT27-c";
+    const tokens = "cRgCOIlORois6-tTQS7iD9:APA91bGczgs17YaXK-T-TqA-PLXPNKgq9t5s8VYgxYRHhKYHH0xd7CLMom5XtbGTNNmW0zb_KoVgTHsCA_VDutB3dnmpqAN4InoIdufKzgLrTdVjxxjkZhc";
 
     try {
         const response = await fetch('/api/send-notification', {
@@ -598,64 +732,64 @@ async function requestNotification(title, body) {
 //   // const targetImageName = getData()+".jpg";
 //   // console.log(targetImageName);
 //   // Hàm để lấy danh sách ảnh từ một thư mục
-//   function getImagesFromFolder(folderName, path) {
-//     const folderRef = storage.ref(folderName);
-//     const imageContainer = document.getElementById(path);
+  function getImagesFromFolder(folderName, path) {
+    const folderRef = storage.ref(folderName);
+    const imageContainer = document.getElementById(path);
   
-//     // Fetch the image name from the database
-//     const nameImagePromise = new Promise((resolve, reject) => {
-//       database.ref("history/uid").on(
-//         "value",
-//         (snapshot) => {
-//           if (snapshot.exists()) {
-//             resolve(JSON.stringify(snapshot.val()));
-//           } else {
-//             reject("No data available");
-//           }
-//         },
-//         (error) => {
-//           reject(error);
-//         }
-//       );
-//     });
+    // Fetch the image name from the database
+    const nameImagePromise = new Promise((resolve, reject) => {
+      database.ref("parking/rfid_realtime/idCard").on(
+        "value",
+        (snapshot) => {
+          if (snapshot.exists()) {
+            resolve(JSON.stringify(snapshot.val()));
+          } else {
+            reject("No data available");
+          }
+        },
+        (error) => {
+          reject(error);
+        }
+      );
+    });
   
-//     // Resolve the promise to get the image name
-//     nameImagePromise
-//       .then((nameImage) => {
-//         folderRef
-//           .listAll()
-//           .then((res) => {
-//             // console.log(JSON.stringify(res));
-//             res.items.forEach((itemRef) => {
-//               console.log(itemRef.name);
-//               console.log(nameImage.replace(/^"(.*)"$/, "$1"));
-//               console.log(itemRef.name === nameImage.replace(/^"(.*)"$/, "$1"));
-//               if (itemRef.name === nameImage.replace(/^"(.*)"$/, "$1")) {
-//                 itemRef
-//                   .getDownloadURL()
-//                   .then((url) => {
-//                     const img = document.createElement("img");
-//                     img.src = url;
-//                     img.alt = nameImage;
+    // Resolve the promise to get the image name
+    nameImagePromise
+      .then((nameImage) => {
+        folderRef
+          .listAll()
+          .then((res) => {
+            // console.log(JSON.stringify(res));
+            res.items.forEach((itemRef) => {
+              console.log(itemRef.name);
+              console.log(nameImage.replace(/^"(.*)"$/, "$1"));
+              console.log(itemRef.name === nameImage.replace(/^"(.*)"$/, "$1"));
+              if (itemRef.name === nameImage.replace(/^"(.*)"$/, "$1")) {
+                itemRef
+                  .getDownloadURL()
+                  .then((url) => {
+                    const img = document.createElement("img");
+                    img.src = url;
+                    img.alt = nameImage;
   
-//                     img.className = "storage-image";
-//                     imageContainer.appendChild(img);
-//                   })
-//                   .catch((error) => {
-//                     console.error("Lỗi khi lấy URL download:", error);
-//                   });
-//               }
-//             });
-//           })
-//           .catch((error) => {
-//             console.log("Lỗi khi liệt kê ảnh:", error);
-//           });
-//       })
-//       .catch((error) => {
-//         console.error("Lỗi khi lấy dữ liệu:", error);
-//       });
-//   }
+                    img.className = "storage-image";
+                    imageContainer.appendChild(img);
+                  })
+                  .catch((error) => {
+                    console.error("Lỗi khi lấy URL download:", error);
+                  });
+              }
+            });
+          })
+          .catch((error) => {
+            console.log("Lỗi khi liệt kê ảnh:", error);
+          });
+      })
+      .catch((error) => {
+        console.error("Lỗi khi lấy dữ liệu:", error);
+      });
+  }
   
 //   // Gọi hàm để lấy ảnh từ hai thư mục
-//   getImagesFromFolder("input/", "in");
-//   getImagesFromFolder("output/", "out");
+  getImagesFromFolder("INTPUT/", "in");
+  getImagesFromFolder("OUTPUT/", "out");
